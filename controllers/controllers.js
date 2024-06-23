@@ -1,7 +1,9 @@
 const bcrypt = require("bcrypt");
 const userModel = require("../models/user.Schema");
 const blogModel = require("../models/Blog.Schema");
-const passport = require("../config/passportconfig")
+const passport = require("../config/passportconfig");
+const fs= require("fs")
+let path = require("path")
 
 const loginpage = async (req, res) => {
   try {
@@ -115,29 +117,37 @@ const viewblog = async (req, res) => {
 
 const insertData = async (req, res) => {
   const { title, date, description, id } = req.body;
-  let image = req.file.path;
+  let image = req.file ? req.file.path : null;
+
   if (id) {
     try {
       let blog = await blogModel.findById(id);
+      if (!blog) {
+        return res.status(404).send("Blog post not found!");
+      }
+
       if (req.file) {
-        fs.unlinkSync(blog.image); // Delete the old image
+        if (blog.image && typeof blog.image === 'string') {
+          fs.unlinkSync(blog.image); // Delete the old image if it exists
+        }
         blog.image = image;
       }
 
       await blogModel.findByIdAndUpdate(id, {
         title,
         date,
-        image,
+        image: blog.image,
         description,
       });
       res.redirect("/viewblog");
     } catch (err) {
       console.log(err);
-      res.send("The server cannot find the request to update blog!");
+      res.status(500).send("The server cannot process the request to update the blog!");
     }
   } else {
-    const { title, date, description } = req.body;
-    let image = req.file.path;
+    if (!image) {
+      return res.status(400).send("Image is required for new blog posts!");
+    }
 
     try {
       await blogModel.create({
@@ -146,28 +156,36 @@ const insertData = async (req, res) => {
         image,
         description,
       });
-      res.redirect("/");
+      res.redirect("/blogPage");
     } catch (error) {
       console.log(error);
-      res.status(404).send("The server cannot find the requested resource!");
+      res.status(500).send("The server cannot process the request to create the blog!");
     }
   }
 };
+
 
 const deleteData = async (req, res) => {
   const { id } = req.params;
 
   try {
     let blog = await blogModel.findById(id);
-    fs.unlinkSync(blog.image); // Delete the old image
+    if (!blog) {
+      return res.status(404).send("Blog post not found!");
+    }
+
+    if (blog.image) {
+      fs.unlinkSync(blog.image); // Delete the old image if it exists
+    }
 
     await blogModel.findByIdAndDelete(id);
     res.redirect("/viewblog");
   } catch (err) {
     console.log(err);
-    res.send("Issue in deleting the data");
+    res.status(500).send("Issue in deleting the data");
   }
 };
+
 
 module.exports = {
   loginpage,
